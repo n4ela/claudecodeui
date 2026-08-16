@@ -13,13 +13,20 @@ type SessionRow = {
   model: string | null;
   /** Permission mode shared by every client attached to this session. */
   permission_mode: string | null;
+  /** Reasoning effort this session runs with; NULL until the app records one. */
+  effort: string | null;
   isArchived: number;
   created_at: string;
   updated_at: string;
 };
 
+type RecentSessionsPage = {
+  sessions: SessionRow[];
+  total: number;
+};
+
 const SESSION_ROW_COLUMNS =
-  'session_id, provider, provider_session_id, project_path, jsonl_path, custom_name, model, permission_mode, isArchived, created_at, updated_at';
+  'session_id, provider, provider_session_id, project_path, jsonl_path, custom_name, model, permission_mode, effort, isArchived, created_at, updated_at';
 
 const SQLITE_UTC_TIMESTAMP_REGEX = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
 
@@ -69,7 +76,9 @@ export const sessionsDb = {
    * The given id is the provider-native session id. Rows are keyed by
    * `provider_session_id` so a session that was first created by the app
    * (with an app-allocated `session_id`) is updated in place once its
-   * transcript shows up on disk, instead of producing a duplicate row.
+   * transcript shows up on disk, instead of producing a duplicate row. An
+   * app-created row keeps its existing name; synchronizer names only update
+   * rows that were themselves created by indexing provider storage.
    */
   createSession(
     providerSessionId: string,
@@ -105,7 +114,10 @@ export const sessionsDb = {
            project_path = ?,
            jsonl_path = ?,
            isArchived = 0,
-           custom_name = COALESCE(?, custom_name)
+           custom_name = CASE
+             WHEN session_id <> provider_session_id AND custom_name IS NOT NULL THEN custom_name
+             ELSE COALESCE(?, custom_name)
+           END
          WHERE session_id = ?`
       ).run(
         provider,
@@ -132,7 +144,11 @@ export const sessionsDb = {
          project_path = excluded.project_path,
          jsonl_path = excluded.jsonl_path,
          isArchived = 0,
-         custom_name = COALESCE(excluded.custom_name, sessions.custom_name)`
+         custom_name = CASE
+           WHEN sessions.session_id <> sessions.provider_session_id AND sessions.custom_name IS NOT NULL
+             THEN sessions.custom_name
+           ELSE COALESCE(excluded.custom_name, sessions.custom_name)
+         END`
     ).run(
       providerSessionId,
       provider,
@@ -153,9 +169,15 @@ export const sessionsDb = {
    * The session gateway uses this when the frontend starts a brand-new chat:
    * `session_id` is the stable app-facing id, while `provider_session_id`
    * stays NULL until the provider runtime announces its own id and
-   * `assignProviderSessionId` records the mapping.
+   * `assignProviderSessionId` records the mapping. `customName` is derived
+   * from the first visible CloudCLI message by the sessions service.
    */
-  createAppSession(sessionId: string, provider: string, projectPath: string): string {
+  createAppSession(
+    sessionId: string,
+    provider: string,
+    projectPath: string,
+    customName?: string,
+  ): string {
     const db = getConnection();
     const normalizedProjectPath = normalizeProjectPathForProvider(provider, projectPath);
 
@@ -163,8 +185,8 @@ export const sessionsDb = {
 
     db.prepare(
       `INSERT INTO sessions (session_id, provider, provider_session_id, custom_name, project_path, jsonl_path, isArchived, created_at, updated_at)
-       VALUES (?, ?, NULL, NULL, ?, NULL, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
-    ).run(sessionId, provider, normalizedProjectPath);
+       VALUES (?, ?, NULL, ?, ?, NULL, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+    ).run(sessionId, provider, customName ?? null, normalizedProjectPath);
 
     return sessionId;
   },
@@ -240,6 +262,21 @@ export const sessionsDb = {
        WHERE session_id = ?`
     ).run(permissionMode, sessionId);
     return result.changes > 0;
+  },
+
+  /**
+   * Records the reasoning effort one session runs with.
+   *
+   * `default` is stored as an explicit choice rather than NULL so reopening
+   * the session does not inherit a later per-provider effort preference.
+   */
+  setSessionEffort(sessionId: string, effort: string): void {
+    const db = getConnection();
+    db.prepare(
+      `UPDATE sessions
+       SET effort = ?
+       WHERE session_id = ?`
+    ).run(effort, sessionId);
   },
 
   updateSessionCustomName(sessionId: string, customName: string): void {
@@ -336,6 +373,46 @@ export const sessionsDb = {
       .all() as SessionRow[];
 
     return normalizeSessionRows(rows);
+  },
+
+  /**
+   * Returns one globally ordered page of visible conversations.
+   *
+   * Pagination happens after archived sessions and sessions belonging to an
+   * archived project have been excluded. This keeps the sidebar feed complete
+   * and correctly ordered across projects instead of flattening only the
+   * per-project slices already loaded by the client.
+   */
+  getRecentSessionsPage(limit: number, offset: number): RecentSessionsPage {
+    const db = getConnection();
+    const visibilityClause = `
+      sessions.isArchived = 0
+      AND (projects.isArchived IS NULL OR projects.isArchived = 0)
+    `;
+    const rows = db
+      .prepare(
+        `SELECT sessions.*
+         FROM sessions
+         LEFT JOIN projects ON projects.project_path = sessions.project_path
+         WHERE ${visibilityClause}
+         ORDER BY julianday(COALESCE(sessions.updated_at, sessions.created_at)) DESC,
+                  sessions.session_id DESC
+         LIMIT ? OFFSET ?`
+      )
+      .all(limit, offset) as SessionRow[];
+    const countRow = db
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM sessions
+         LEFT JOIN projects ON projects.project_path = sessions.project_path
+         WHERE ${visibilityClause}`
+      )
+      .get() as { count: number } | undefined;
+
+    return {
+      sessions: normalizeSessionRows(rows),
+      total: Number(countRow?.count ?? 0),
+    };
   },
 
   /**
