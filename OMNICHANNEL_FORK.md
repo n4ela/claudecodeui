@@ -28,7 +28,7 @@ English for every other CloudCLI language.
 Use the conventional fork layout:
 
 ```text
-origin    https://github.com/<github-user>/claudecodeui.git
+origin    https://github.com/n4ela/claudecodeui.git
 upstream  https://github.com/siteboon/claudecodeui.git
 ```
 
@@ -81,4 +81,3 @@ transport. Never resolve those conflicts by choosing one whole side.
 репозитории и версионируется независимо. Это позволяет обновлять интерфейс и
 бота без пересборки CloudCLI, а маленькую обязательную доработку транспорта —
 аккуратно переносить на каждый новый официальный релиз.
-
