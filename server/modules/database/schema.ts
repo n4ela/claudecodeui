@@ -113,6 +113,9 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- session and on every send, so reopening a session restores the model it
     -- was last used with instead of falling back to the catalog default.
     model TEXT,
+    -- Server-authoritative permission mode shared by every channel attached
+    -- to this session (WebUI, Telegram, and future integrations).
+    permission_mode TEXT,
     isArchived BOOLEAN DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,

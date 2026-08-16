@@ -67,6 +67,7 @@ type ProviderCapabilitiesApiResponse = {
 interface UseChatProviderStateArgs {
   selectedSession: ProjectSession | null;
   selectedProject: Project | null;
+  onPermissionModeSelected?: (permissionMode: PermissionMode) => void;
 }
 
 type ProviderModelsApiResponse = {
@@ -92,7 +93,11 @@ type SessionModelApiResponse = {
   };
 };
 
-export function useChatProviderState({ selectedSession, selectedProject: _selectedProject }: UseChatProviderStateArgs) {
+export function useChatProviderState({
+  selectedSession,
+  selectedProject: _selectedProject,
+  onPermissionModeSelected,
+}: UseChatProviderStateArgs) {
   const [permissionMode, setPermissionMode] = useState<PermissionMode>('default');
   const [pendingPermissionRequests, setPendingPermissionRequests] = useState<PendingPermissionRequest[]>([]);
   const [provider, setProvider] = useState<LLMProvider>(readStoredProvider);
@@ -478,7 +483,22 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
     if (selectedSession?.id) {
       localStorage.setItem(`permissionMode-${selectedSession.id}`, nextMode);
     }
-  }, [provider, selectedSession?.id]);
+    onPermissionModeSelected?.(nextMode);
+  }, [onPermissionModeSelected, provider, selectedSession?.id]);
+
+  const applySessionPermissionMode = useCallback((sessionId: string, nextMode: string) => {
+    const targetProvider = selectedSession?.__provider ?? provider;
+    const validModes = getPermissionModesForProvider(targetProvider);
+    if (!validModes.includes(nextMode as PermissionMode)) {
+      return;
+    }
+
+    localStorage.setItem(`permissionMode-${sessionId}`, nextMode);
+    if (selectedSession?.id === sessionId) {
+      localStorage.setItem(`permissionMode-last-${targetProvider}`, nextMode);
+      setPermissionMode(nextMode as PermissionMode);
+    }
+  }, [getPermissionModesForProvider, provider, selectedSession?.__provider, selectedSession?.id]);
 
   const cyclePermissionMode = useCallback(() => {
     const modes = getPermissionModesForProvider(provider);
@@ -624,6 +644,7 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
     setPendingPermissionRequests,
     availablePermissionModes,
     selectPermissionMode,
+    applySessionPermissionMode,
     cyclePermissionMode,
     providerModelCatalog,
     providerModelCacheCatalog,

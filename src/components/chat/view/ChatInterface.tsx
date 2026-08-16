@@ -59,6 +59,17 @@ function ChatInterface({
     accumulatedStreamRef.current = '';
   }, []);
 
+  const handlePermissionModeSelected = useCallback((nextMode: PermissionMode) => {
+    if (!selectedSession?.id) {
+      return;
+    }
+    sendMessage({
+      type: 'chat.permission-mode',
+      sessionId: selectedSession.id,
+      permissionMode: nextMode,
+    });
+  }, [selectedSession?.id, sendMessage]);
+
   const {
     provider,
     setProvider,
@@ -79,6 +90,7 @@ function ChatInterface({
     setPendingPermissionRequests,
     availablePermissionModes,
     selectPermissionMode,
+    applySessionPermissionMode,
     cyclePermissionMode,
     providerModelCatalog,
     providerModelCacheCatalog,
@@ -91,6 +103,7 @@ function ChatInterface({
   } = useChatProviderState({
     selectedSession,
     selectedProject,
+    onPermissionModeSelected: handlePermissionModeSelected,
   });
 
   const {
@@ -253,6 +266,7 @@ function ChatInterface({
     onSessionProcessing,
     onSessionIdle,
     onWebSocketReconnect: handleWebSocketReconnect,
+    onSessionPermissionMode: applySessionPermissionMode,
     sessionStore,
   });
 

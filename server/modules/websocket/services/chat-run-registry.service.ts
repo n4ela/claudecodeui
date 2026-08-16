@@ -62,6 +62,30 @@ const MAX_BUFFERED_EVENTS_PER_RUN = 5000;
  */
 const runs = new Map<string, ChatRun>();
 
+/**
+ * Sends one realtime chat event to the run's primary connection and every
+ * other authenticated chat client. A Set prevents the primary WebUI from
+ * receiving a duplicate when it is also present in `connectedClients`.
+ */
+function broadcastRealtimeChatEvent(
+  message: NormalizedMessage,
+  primaryConnection: RealtimeClientConnection | null = null,
+  excludedConnection: RealtimeClientConnection | null = null,
+): void {
+  const payload = JSON.stringify(message);
+  const recipients = new Set<RealtimeClientConnection>(connectedClients);
+  if (primaryConnection) {
+    recipients.add(primaryConnection);
+  }
+
+  for (const client of recipients) {
+    if (client === excludedConnection || client.readyState !== WS_OPEN_STATE) {
+      continue;
+    }
+    client.send(payload);
+  }
+}
+
 async function broadcastCanonicalSessionUpsert(appSessionId: string): Promise<void> {
   const row = sessionsDb.getSessionById(appSessionId);
   if (!row || row.isArchived) {
@@ -242,10 +266,25 @@ export const chatRunRegistry = {
         recordProviderSessionId(run, providerSessionId);
       },
       decorateOutboundEvent: (message) => decorateAndRecordEvent(run, message),
+      deliverOutboundEvent: (message) => {
+        broadcastRealtimeChatEvent(message, run.writer.ws);
+      },
     });
 
     runs.set(input.appSessionId, run);
     return run;
+  },
+
+  /**
+   * Used by the chat WebSocket gateway to mirror accepted user input to every
+   * channel except its origin. The exclusion prevents an optimistic WebUI
+   * message—or a Telegram user's own message—from being echoed back twice.
+   */
+  broadcastPeerInput(
+    message: NormalizedMessage,
+    originConnection: RealtimeClientConnection,
+  ): void {
+    broadcastRealtimeChatEvent(message, null, originConnection);
   },
 
   getRun(appSessionId: string): ChatRun | undefined {

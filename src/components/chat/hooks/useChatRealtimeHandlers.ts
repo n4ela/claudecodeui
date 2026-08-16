@@ -39,6 +39,7 @@ interface UseChatRealtimeHandlersArgs {
   onSessionProcessing?: MarkSessionProcessing;
   onSessionIdle?: MarkSessionIdle;
   onWebSocketReconnect?: () => void;
+  onSessionPermissionMode?: (sessionId: string, permissionMode: string) => void;
   sessionStore: SessionStore;
 }
 
@@ -70,6 +71,7 @@ export function useChatRealtimeHandlers({
   onSessionProcessing,
   onSessionIdle,
   onWebSocketReconnect,
+  onSessionPermissionMode,
   sessionStore,
 }: UseChatRealtimeHandlersArgs) {
   // Session switches can send `chat.subscribe` before this effect has a chance
@@ -115,6 +117,10 @@ export function useChatRealtimeHandlers({
           // pending tool-permission prompts for the run.
           if (!sid) return;
 
+          if (typeof msg.permissionMode === 'string') {
+            onSessionPermissionMode?.(sid, msg.permissionMode);
+          }
+
           if (msg.isProcessing) {
             onSessionProcessing?.(sid);
           } else {
@@ -140,6 +146,12 @@ export function useChatRealtimeHandlers({
           }
           return;
         }
+
+        case 'session_permission_mode':
+          if (sid && typeof msg.permissionMode === 'string') {
+            onSessionPermissionMode?.(sid, msg.permissionMode);
+          }
+          return;
 
         case 'protocol_error': {
           console.error('[Chat] Protocol error:', msg.code, msg.error);
@@ -343,6 +355,7 @@ export function useChatRealtimeHandlers({
     onSessionProcessing,
     onSessionIdle,
     onWebSocketReconnect,
+    onSessionPermissionMode,
     sessionStore,
   ]);
 }

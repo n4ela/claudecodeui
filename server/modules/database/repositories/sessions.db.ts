@@ -11,13 +11,15 @@ type SessionRow = {
   custom_name: string | null;
   /** Model this session runs with; NULL until the app records one for it. */
   model: string | null;
+  /** Permission mode shared by every client attached to this session. */
+  permission_mode: string | null;
   isArchived: number;
   created_at: string;
   updated_at: string;
 };
 
 const SESSION_ROW_COLUMNS =
-  'session_id, provider, provider_session_id, project_path, jsonl_path, custom_name, model, isArchived, created_at, updated_at';
+  'session_id, provider, provider_session_id, project_path, jsonl_path, custom_name, model, permission_mode, isArchived, created_at, updated_at';
 
 const SQLITE_UTC_TIMESTAMP_REGEX = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
 
@@ -227,6 +229,17 @@ export const sessionsDb = {
        SET model = ?
        WHERE session_id = ?`
     ).run(model, sessionId);
+  },
+
+  /** Stores the permission mode used by every channel for one session. */
+  setSessionPermissionMode(sessionId: string, permissionMode: string): boolean {
+    const db = getConnection();
+    const result = db.prepare(
+      `UPDATE sessions
+       SET permission_mode = ?
+       WHERE session_id = ?`
+    ).run(permissionMode, sessionId);
+    return result.changes > 0;
   },
 
   updateSessionCustomName(sessionId: string, customName: string): void {

@@ -1,4 +1,3 @@
-import { WS_OPEN_STATE } from '@/modules/websocket/services/websocket-state.service.js';
 import type {
   LLMProvider,
   NormalizedMessage,
@@ -25,6 +24,12 @@ type ChatSessionWriterOptions = {
    * `complete` after an abort already completed the run).
    */
   decorateOutboundEvent: (message: NormalizedMessage) => NormalizedMessage | null;
+  /**
+   * Delivers one already-normalized event to every channel observing the
+   * session. The chat run registry owns fan-out so provider adapters and this
+   * writer remain unaware of concrete transports such as WebUI or Telegram.
+   */
+  deliverOutboundEvent: (message: NormalizedMessage) => void;
 };
 
 /**
@@ -138,8 +143,6 @@ export class ChatSessionWriter {
   }
 
   private forward(message: NormalizedMessage): void {
-    if (this.ws.readyState === WS_OPEN_STATE) {
-      this.ws.send(JSON.stringify(message));
-    }
+    this.options.deliverOutboundEvent(message);
   }
 }

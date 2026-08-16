@@ -69,6 +69,60 @@ test('live events are remapped to the app session id and sequenced', async () =>
   });
 });
 
+test('live events fan out once to the primary WebUI and every connected channel', async () => {
+  await withIsolatedDatabase(() => {
+    sessionsDb.createAppSession('app-run-fanout', 'codex', '/workspace/demo');
+    const webUiConnection = new FakeConnection();
+    const telegramConnection = new FakeConnection();
+    connectedClients.add(webUiConnection as never);
+    connectedClients.add(telegramConnection as never);
+
+    const run = chatRunRegistry.startRun({
+      appSessionId: 'app-run-fanout',
+      provider: 'codex',
+      providerSessionId: 'native-fanout',
+      connection: webUiConnection,
+      userId: 'user-1',
+    });
+    assert.ok(run);
+
+    run.writer.send({
+      kind: 'text',
+      role: 'assistant',
+      provider: 'codex',
+      sessionId: 'native-fanout',
+      content: 'Shared answer',
+    });
+
+    assert.equal(webUiConnection.frames.length, 1);
+    assert.equal(telegramConnection.frames.length, 1);
+    assert.deepEqual(webUiConnection.frames[0], telegramConnection.frames[0]);
+  });
+});
+
+test('peer input is mirrored to every channel except its origin', async () => {
+  await withIsolatedDatabase(() => {
+    const webUiConnection = new FakeConnection();
+    const telegramConnection = new FakeConnection();
+    connectedClients.add(webUiConnection as never);
+    connectedClients.add(telegramConnection as never);
+
+    chatRunRegistry.broadcastPeerInput({
+      id: 'input-1',
+      sessionId: 'app-input-1',
+      timestamp: new Date().toISOString(),
+      provider: 'codex',
+      kind: 'text',
+      role: 'user',
+      content: 'Sent from Telegram',
+    }, telegramConnection as never);
+
+    assert.equal(telegramConnection.frames.length, 0);
+    assert.equal(webUiConnection.frames.length, 1);
+    assert.equal(webUiConnection.frames[0]?.content, 'Sent from Telegram');
+  });
+});
+
 test('session_created is swallowed and persisted as the provider-id mapping', async () => {
   await withIsolatedDatabase(() => {
     sessionsDb.createAppSession('app-run-2', 'cursor', '/workspace/demo');

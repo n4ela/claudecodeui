@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { WebSocket } from 'ws';
 
 import { sessionsDb } from '@/modules/database/index.js';
-import { providerModelsService } from '@/modules/providers/index.js';
+import { providerModelsService, sessionPermissionModeService } from '@/modules/providers/index.js';
 import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
 import { connectedClients, WS_OPEN_STATE } from '@/modules/websocket/services/websocket-state.service.js';
 import {
@@ -19,7 +19,7 @@ import type {
   ProviderPermissionDecision,
   ProviderRuntimeWriter,
 } from '@/shared/types.js';
-import { parseIncomingJsonObject } from '@/shared/utils.js';
+import { createNormalizedMessage, parseIncomingJsonObject } from '@/shared/utils.js';
 
 /**
  * Trust boundary for client-supplied image attachments: chat.send options come
@@ -111,6 +111,15 @@ function sendJson(ws: WebSocket, payload: unknown): void {
   }
 }
 
+function broadcastJson(payload: unknown): void {
+  const encoded = JSON.stringify(payload);
+  for (const client of connectedClients) {
+    if (client.readyState === WS_OPEN_STATE) {
+      client.send(encoded);
+    }
+  }
+}
+
 /**
  * Reports a protocol-level failure to the requesting client.
  *
@@ -192,6 +201,31 @@ async function handleChatSend(
 
   const clientOptions = (data.options ?? {}) as AnyRecord;
   const command = typeof data.content === 'string' ? data.content : '';
+  const sessionPermissionMode = sessionPermissionModeService.getSessionPermissionMode(
+    sessionId,
+    clientOptions.permissionMode,
+  );
+  if (!sessionPermissionMode) {
+    sendProtocolError(ws, 'UNSUPPORTED_PROVIDER', `Provider "${provider}" is not available.`, sessionId);
+    chatRunRegistry.completeRunIfCurrent(run, { exitCode: 1 });
+    return;
+  }
+
+  // The origin renders its own user input optimistically. Mirror the accepted
+  // input to every other connected channel so a Telegram message appears in
+  // WebUI immediately and a WebUI message appears in Telegram without running
+  // the provider a second time.
+  chatRunRegistry.broadcastPeerInput(
+    createNormalizedMessage({
+      provider,
+      sessionId,
+      kind: 'text',
+      role: 'user',
+      content: command,
+      channelSource: typeof data.channelSource === 'string' ? data.channelSource : 'webui',
+    }),
+    ws,
+  );
 
   // Record what this turn runs with so reopening the session later restores the
   // same model, and so the resume path has a session-scoped answer to use.
@@ -217,6 +251,9 @@ async function handleChatSend(
   // app session id.
   const runtimeOptions: AnyRecord = {
     ...clientOptions,
+    // A stale browser tab or an integration cannot override the session's
+    // shared server-side mode merely by sending another prompt.
+    permissionMode: sessionPermissionMode.permissionMode,
     // Attachments are re-validated server-side: only direct children of the
     // global upload store may reach provider runtimes or their file tools.
     attachments: uniqueAttachments,
@@ -306,6 +343,11 @@ function handleChatSubscribe(
 
     const run = chatRunRegistry.getRun(sessionId);
     const isProcessing = chatRunRegistry.isProcessing(sessionId);
+    const sessionPermissionMode = sessionPermissionModeService.getSessionPermissionMode(sessionId);
+    if (!sessionPermissionMode) {
+      sendProtocolError(ws, 'SESSION_NOT_FOUND', `Session "${sessionId}" was not found.`, sessionId);
+      continue;
+    }
 
     // Future live events for this run should land on the socket that asked —
     // this is what makes mid-stream page refreshes work for all providers.
@@ -323,6 +365,7 @@ function handleChatSubscribe(
       isProcessing,
       lastSeq: run?.lastSeq ?? 0,
       pendingPermissions,
+      permissionMode: sessionPermissionMode.permissionMode,
       timestamp: new Date().toISOString(),
     });
 
@@ -336,6 +379,32 @@ function handleChatSubscribe(
       }
     }
   }
+}
+
+/** Updates one session's shared permission mode and notifies every channel. */
+function handlePermissionMode(ws: WebSocket, data: AnyRecord): void {
+  const sessionId = readRequiredSessionId(data);
+  if (!sessionId) {
+    sendProtocolError(ws, 'SESSION_ID_REQUIRED', 'chat.permission-mode requires a sessionId.');
+    return;
+  }
+
+  const result = sessionPermissionModeService.setSessionPermissionMode(
+    sessionId,
+    data.permissionMode,
+  );
+  if (!result.ok) {
+    sendProtocolError(ws, result.code, result.error, sessionId);
+    return;
+  }
+
+  broadcastJson({
+    kind: 'session_permission_mode',
+    sessionId,
+    provider: result.value.provider,
+    permissionMode: result.value.permissionMode,
+    timestamp: new Date().toISOString(),
+  });
 }
 
 /**
@@ -363,6 +432,7 @@ function handlePermissionResponse(data: AnyRecord, dependencies: ChatWebSocketDe
  * - `chat.send`                { sessionId, content, options? }
  * - `chat.abort`               { sessionId }
  * - `chat.subscribe`           { sessions: [{ sessionId, lastSeq? }] }
+ * - `chat.permission-mode`     { sessionId, permissionMode }
  * - `chat.permission-response` { requestId, allow, updatedInput?, message?, rememberEntry? }
  *
  * Outbound protocol (server to client): every frame is `kind`-based — either
@@ -399,6 +469,9 @@ export function handleChatConnection(
           return;
         case 'chat.subscribe':
           handleChatSubscribe(ws, data, dependencies);
+          return;
+        case 'chat.permission-mode':
+          handlePermissionMode(ws, data);
           return;
         case 'chat.permission-response':
           handlePermissionResponse(data, dependencies);

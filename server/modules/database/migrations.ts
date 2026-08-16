@@ -287,6 +287,10 @@ const rebuildSessionsTableWithProjectSchema = (db: Database): void => {
     ? 'jsonl_path'
     : 'NULL';
 
+  const permissionModeExpression = columnNames.includes('permission_mode')
+    ? 'permission_mode'
+    : 'NULL';
+
   const isArchivedExpression = columnNames.includes('isArchived')
     ? 'COALESCE(isArchived, 0)'
     : '0';
@@ -310,6 +314,7 @@ const rebuildSessionsTableWithProjectSchema = (db: Database): void => {
         custom_name TEXT,
         project_path TEXT,
         jsonl_path TEXT,
+        permission_mode TEXT,
         isArchived BOOLEAN DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -327,6 +332,7 @@ const rebuildSessionsTableWithProjectSchema = (db: Database): void => {
           ${customNameExpression} AS custom_name,
           ${projectPathExpression} AS project_path,
           ${jsonlPathExpression} AS jsonl_path,
+          ${permissionModeExpression} AS permission_mode,
           ${isArchivedExpression} AS isArchived,
           ${createdAtExpression} AS created_at,
           ${updatedAtExpression} AS updated_at,
@@ -341,6 +347,7 @@ const rebuildSessionsTableWithProjectSchema = (db: Database): void => {
           custom_name,
           project_path,
           jsonl_path,
+          permission_mode,
           isArchived,
           created_at,
           updated_at,
@@ -356,6 +363,7 @@ const rebuildSessionsTableWithProjectSchema = (db: Database): void => {
         custom_name,
         project_path,
         jsonl_path,
+        permission_mode,
         isArchived,
         created_at,
         updated_at
@@ -366,6 +374,7 @@ const rebuildSessionsTableWithProjectSchema = (db: Database): void => {
         custom_name,
         project_path,
         jsonl_path,
+        permission_mode,
         isArchived,
         created_at,
         updated_at
@@ -414,6 +423,19 @@ const addSessionModelColumn = (db: Database): void => {
   const columnNames = sessionsTableInfo.map((column) => column.name);
 
   addColumnToTableIfNotExists(db, 'sessions', columnNames, 'model', 'TEXT');
+};
+
+/**
+ * Adds the server-authoritative permission mode shared by all session clients.
+ *
+ * Existing rows remain NULL so the provider service can apply and persist the
+ * correct provider-specific default the first time the session is opened.
+ */
+const addSessionPermissionModeColumn = (db: Database): void => {
+  const sessionsTableInfo = getTableInfo(db, 'sessions');
+  const columnNames = sessionsTableInfo.map((column) => column.name);
+
+  addColumnToTableIfNotExists(db, 'sessions', columnNames, 'permission_mode', 'TEXT');
 };
 
 const ensureProjectsForSessionPaths = (db: Database): void => {
@@ -467,6 +489,7 @@ export const runMigrations = (db: Database) => {
     migrateLegacySessionNames(db);
     addProviderSessionIdMapping(db);
     addSessionModelColumn(db);
+    addSessionPermissionModeColumn(db);
     ensureProjectsForSessionPaths(db);
 
     db.exec('CREATE INDEX IF NOT EXISTS idx_session_ids_lookup ON sessions(session_id)');
