@@ -630,6 +630,8 @@ export function useChatComposerState({
               ? 'codex-settings'
               : provider === 'opencode'
                   ? 'opencode-settings'
+                : provider === 'kimi'
+                  ? 'kimi-settings'
                 : 'claude-settings';
         const savedSettings = safeLocalStorage.getItem(settingsKey);
         if (savedSettings) {

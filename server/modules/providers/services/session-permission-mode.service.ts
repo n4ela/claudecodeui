@@ -12,7 +12,7 @@ type SetSessionPermissionModeResult =
   | { ok: true; value: SessionPermissionMode }
   | { ok: false; code: 'SESSION_NOT_FOUND' | 'UNSUPPORTED_PROVIDER' | 'INVALID_PERMISSION_MODE'; error: string };
 
-const PROVIDERS: LLMProvider[] = ['claude', 'cursor', 'codex', 'opencode'];
+const PROVIDERS: LLMProvider[] = ['claude', 'cursor', 'codex', 'opencode', 'kimi'];
 
 function isProvider(value: string): value is LLMProvider {
   return PROVIDERS.includes(value as LLMProvider);

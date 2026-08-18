@@ -29,6 +29,10 @@ const PROVIDER_WATCH_PATHS: Array<{ provider: LLMProvider; rootPath: string }> =
     provider: 'opencode',
     rootPath: path.join(os.homedir(), '.local', 'share', 'opencode'),
   },
+  {
+    provider: 'kimi',
+    rootPath: process.env.KIMI_CODE_HOME?.trim() || path.join(os.homedir(), '.kimi-code'),
+  },
 ];
 
 const WATCHER_IGNORED_PATTERNS = [
@@ -71,6 +75,12 @@ let watcherRescheduleAfterRefresh = false;
 function isWatcherTargetFile(provider: LLMProvider, filePath: string): boolean {
   if (provider === 'opencode') {
     return path.basename(filePath) === 'opencode.db';
+  }
+
+  if (provider === 'kimi') {
+    return path.basename(filePath) === 'session_index.jsonl'
+      || path.basename(filePath) === 'state.json'
+      || filePath.endsWith(`${path.sep}agents${path.sep}main${path.sep}wire.jsonl`);
   }
 
   return filePath.endsWith('.jsonl');

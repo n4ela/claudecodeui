@@ -17,7 +17,8 @@
     "tool": "Strumento",
     "claude": "Claude",
     "cursor": "Cursor",
-    "codex": "Codex"
+    "codex": "Codex",
+    "kimi": "Kimi Code"
   },
   "tools": {
     "settings": "Impostazioni strumento",

@@ -37,6 +37,13 @@ const providerCards = [
     iconContainerClassName: 'bg-zinc-100 dark:bg-zinc-800',
     loginButtonClassName: 'bg-zinc-800 hover:bg-zinc-900 dark:bg-zinc-700 dark:hover:bg-zinc-600',
   },
+  {
+    provider: 'kimi' as const,
+    title: 'Kimi Code',
+    connectedClassName: 'bg-violet-50 dark:bg-violet-900/20 border-violet-200 dark:border-violet-800',
+    iconContainerClassName: 'bg-violet-100 dark:bg-violet-900/30',
+    loginButtonClassName: 'bg-violet-600 hover:bg-violet-700',
+  },
 ];
 
 export default function AgentConnectionsStep({

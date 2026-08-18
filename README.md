@@ -1,7 +1,7 @@
 <div align="center">
  <img src="public/logo.svg" alt="CloudCLI UI" width="64" height="64">
  <h1>Cloud CLI (aka Claude Code UI)</h1>
- <p>A desktop and mobile UI for <a href="https://docs.anthropic.com/en/docs/claude-code">Claude Code</a>, <a href="https://docs.cursor.com/en/cli/overview">Cursor CLI</a>, and <a href="https://developers.openai.com/codex">Codex</a>.<br>Use it locally or remotely to view your active projects and sessions from everywhere.</p>
+ <p>A desktop and mobile UI for <a href="https://docs.anthropic.com/en/docs/claude-code">Claude Code</a>, <a href="https://docs.cursor.com/en/cli/overview">Cursor CLI</a>, <a href="https://developers.openai.com/codex">Codex</a>, OpenCode, and <a href="https://www.kimi.com/code/docs/en/">Kimi Code</a>.<br>Use it locally or remotely to view your active projects and sessions from everywhere.</p>
 </div>
 
 <p align="center">
@@ -18,6 +18,11 @@
 <div align="right"><i><b>English</b> · <a href="./README.ru.md">Русский</a> · <a href="./README.de.md">Deutsch</a> · <a href="./README.ko.md">한국어</a> · <a href="./README.zh-CN.md">简体中文</a> · <a href="./README.zh-TW.md">繁體中文</a> · <a href="./README.ja.md">日本語</a> · <a href="./README.tr.md">Türkçe</a></i></div>
 
 ---
+
+> This is the [CloudCLI Omnichannel fork](OMNICHANNEL_FORK.md). In addition to
+> the upstream application, it provides native Kimi Code sessions and the
+> provider-independent transport used by the
+> [Telegram Bridge](https://github.com/n4ela/cloudcli-plugin-telegram-bridge).
 
 ## Screenshots
 
@@ -43,7 +48,7 @@
 <h3>CLI Selection</h3>
 <img src="public/screenshots/cli-selection.png" alt="CLI Selection" width="400">
 <br>
-<em>Select between Claude Code, Cursor CLI and Codex</em>
+<em>Select between Claude Code, Cursor CLI, Codex, OpenCode, and Kimi Code</em>
 </td>
 </tr>
 </table>
@@ -63,7 +68,7 @@
 - **Session Management** - Resume conversations, manage multiple sessions, and track history
 - **Plugin System** - Extend CloudCLI with custom plugins — add new tabs, backend services, and integrations. [Build your own →](https://github.com/cloudcli-ai/cloudcli-plugin-starter)
 - **TaskMaster AI Integration** *(Optional)* - Advanced project management with AI-powered task planning, PRD parsing, and workflow automation
-- **Model Compatibility** - Works with Claude and GPT model families (the full list of supported models is available at runtime via `GET /api/providers/:provider/models`)
+- **Model Compatibility** - Works with Claude, GPT, OpenCode, and Kimi Code model catalogs (the full list is available at runtime via `GET /api/providers/:provider/models`)
 
 
 ## Quick Start
@@ -131,7 +136,7 @@ CloudCLI UI is the open source UI layer that powers CloudCLI Cloud. You can self
 | **Machine needs to stay on** | Yes | Yes | No |
 | **Mobile access** | Any browser on your network | Any browser on your network | Any device |
 | **Desktop companion** | Optional. Choose Local CloudCLI | Optional. Choose Local CloudCLI | Optional. Opens cloud environments |
-| **Agents supported** | Claude Code, Cursor CLI, Codex | Claude Code, Codex | Claude Code, Cursor CLI, Codex |
+| **Agents supported** | Claude Code, Cursor CLI, Codex, OpenCode, Kimi Code | Claude Code, Codex | Claude Code, Cursor CLI, Codex |
 | **File explorer and Git** | Yes | Yes | Yes |
 | **MCP configuration** | Synced with `~/.claude` | Managed via UI | Managed via UI |
 | **REST API** | Yes | Yes | Yes |
@@ -203,7 +208,7 @@ Here's what that means in practice:
 
 - **All your sessions, not just one** — CloudCLI UI auto-discovers every session from your `~/.claude` folder. Remote Control only exposes the single active session to make it available in the Claude mobile app.
 - **Your settings are your settings** — MCP servers, tool permissions, and project config you change in CloudCLI UI are written directly to your Claude Code config and take effect immediately, and vice versa.
-- **Works with more agents** — Claude Code, Cursor CLI and Codex, not just Claude Code.
+- **Works with more agents** — Claude Code, Cursor CLI, Codex, OpenCode, and Kimi Code, not just Claude Code.
 - **Full UI, not just a chat window** — file explorer, Git integration, MCP management, and a shell terminal are all built in.
 - **CloudCLI Cloud runs in the cloud** — close your laptop, the agent keeps running. No terminal to babysit, no machine to keep awake.
 
@@ -212,7 +217,7 @@ Here's what that means in practice:
 <details>
 <summary>Do I need to pay for an AI subscription separately?</summary>
 
-Yes. CloudCLI provides the environment, not the AI. You bring your own Claude, Cursor, or Codex subscription. CloudCLI Cloud starts at €7/month for the hosted environment on top of that.
+Yes. CloudCLI provides the environment, not the AI. You bring your own provider subscription. CloudCLI Cloud starts at €7/month for the hosted environment on top of that.
 
 </details>
 
@@ -253,6 +258,7 @@ CloudCLI UI - (https://cloudcli.ai).
 - **[Claude Code](https://docs.anthropic.com/en/docs/claude-code)** - Anthropic's official CLI
 - **[Cursor CLI](https://docs.cursor.com/en/cli/overview)** - Cursor's official CLI
 - **[Codex](https://developers.openai.com/codex)** - OpenAI Codex
+- **[Kimi Code](https://www.kimi.com/code/docs/en/)** - Moonshot AI's official coding agent CLI
 - **[React](https://react.dev/)** - User interface library
 - **[Vite](https://vitejs.dev/)** - Fast build tool and dev server
 - **[Tailwind CSS](https://tailwindcss.com/)** - Utility-first CSS framework
@@ -265,5 +271,5 @@ CloudCLI UI - (https://cloudcli.ai).
 ---
 
 <div align="center">
- <strong>Made with care for the Claude Code, Cursor and Codex community.</strong>
+ <strong>Made with care for the coding-agent community.</strong>
 </div>

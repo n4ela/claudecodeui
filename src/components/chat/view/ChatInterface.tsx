@@ -85,6 +85,8 @@ function ChatInterface({
     currentProviderModelOptions,
     opencodeModel,
     setOpenCodeModel,
+    kimiModel,
+    setKimiModel,
     permissionMode,
     pendingPermissionRequests,
     setPendingPermissionRequests,
@@ -329,6 +331,8 @@ function ChatInterface({
         ? t('messageTypes.codex')
         : provider === 'opencode'
             ? t('messageTypes.opencode', { defaultValue: 'OpenCode' })
+          : provider === 'kimi'
+            ? t('messageTypes.kimi', { defaultValue: 'Kimi Code' })
           : t('messageTypes.claude');
 
   if (!selectedProject) {
@@ -370,6 +374,8 @@ function ChatInterface({
           setCodexModel={setCodexModel}
           opencodeModel={opencodeModel}
           setOpenCodeModel={setOpenCodeModel}
+          kimiModel={kimiModel}
+          setKimiModel={setKimiModel}
           providerModelCatalog={providerModelCatalog}
           providerModelActions={providerModelActions}
           providerModelsLoading={providerModelsLoading}

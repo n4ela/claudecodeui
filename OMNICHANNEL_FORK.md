@@ -2,13 +2,13 @@
 
 This fork keeps CloudCLI close to official stable releases while adding the
 provider-independent session transport required by external conversation
-channels such as Telegram.
+channels such as Telegram, plus native Kimi Code CLI support.
 
 ## Repository split
 
 | Repository | Responsibility |
 | --- | --- |
-| `cloudcli-omnichannel` | CloudCLI fork: multi-client event fan-out, external channel input, shared queue, and server-authoritative session permission mode. |
+| `cloudcli-omnichannel` | CloudCLI fork: native Kimi Code provider, multi-client event fan-out, external channel input, shared queue, and server-authoritative session settings. |
 | `cloudcli-plugin-telegram-bridge` | Installable plugin: Telegram bot, pairing, localization, silent mirroring, and persistent schedules. |
 
 The plugin stays separate so Telegram-specific work can be released without
@@ -16,9 +16,26 @@ rebuilding the whole application. The core patch cannot currently be a normal
 plugin because upstream's public plugin API does not expose chat interception
 or a session event fan-out hook.
 
+## Native Kimi Code provider
+
+Install the official CLI and authenticate it on the same account that runs
+CloudCLI:
+
+```bash
+curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash
+kimi login
+```
+
+CloudCLI then discovers Kimi sessions from `~/.kimi-code`, reads the live model
+catalog, resumes the same provider-native thread, exposes Kimi MCP servers and
+skills, and maps `low`, `high`, and `max` reasoning effort onto
+`KIMI_MODEL_THINKING_EFFORT`. Telegram and scheduled runs use the provider,
+model, effort, and history stored on the selected CloudCLI session.
+
 ## Language support
 
-CloudCLI `v1.37.1` includes English, French, Spanish, Korean, Simplified and
+The fork currently tracks CloudCLI `v1.37.1`, the latest upstream stable tag.
+CloudCLI includes English, French, Spanish, Korean, Simplified and
 Traditional Chinese, Japanese, Russian, German, Turkish, and Italian. The
 Telegram plugin currently provides English and Russian and falls back to
 English for every other CloudCLI language.

@@ -1,7 +1,7 @@
 <div align="center">
  <img src="public/logo.svg" alt="CloudCLI UI" width="64" height="64">
  <h1>Cloud CLI (aka Claude Code UI)</h1>
- <p>Десктопный и мобильный UI для <a href="https://docs.anthropic.com/en/docs/claude-code">Claude Code</a>, <a href="https://docs.cursor.com/en/cli/overview">Cursor CLI</a>, <a href="https://developers.openai.com/codex">Codex</a>.<br>Используйте локально или удалённо, чтобы просматривать активные проекты и сессии отовсюду.</p>
+ <p>Десктопный и мобильный UI для <a href="https://docs.anthropic.com/en/docs/claude-code">Claude Code</a>, <a href="https://docs.cursor.com/en/cli/overview">Cursor CLI</a>, <a href="https://developers.openai.com/codex">Codex</a>, OpenCode и <a href="https://www.kimi.com/code/docs/en/">Kimi Code</a>.<br>Используйте локально или удалённо, чтобы просматривать активные проекты и сессии отовсюду.</p>
 </div>
 
 <p align="center">
@@ -18,6 +18,11 @@
 <div align="right"><i><a href="./README.md">English</a> · <b>Русский</b> · <a href="./README.de.md">Deutsch</a> · <a href="./README.ko.md">한국어</a> · <a href="./README.zh-CN.md">简体中文</a> · <a href="./README.zh-TW.md">繁體中文</a> · <a href="./README.ja.md">日本語</a> · <a href="./README.tr.md">Türkçe</a></i></div>
 
 ---
+
+> Это [омниканальный форк CloudCLI](OMNICHANNEL_FORK.md). Помимо возможностей
+> upstream-версии, в нём есть нативные сессии Kimi Code и независимый от
+> провайдера транспорт для
+> [Telegram Bridge](https://github.com/n4ela/cloudcli-plugin-telegram-bridge).
 
 ## Скриншоты
 
@@ -43,7 +48,7 @@
 <h3>Выбор CLI</h3>
 <img src="public/screenshots/cli-selection.png" alt="CLI Selection" width="400">
 <br>
-<em>Выбирайте между Claude Code, Cursor CLI и Codex</em>
+<em>Выбирайте между Claude Code, Cursor CLI, Codex, OpenCode и Kimi Code</em>
 </td>
 </tr>
 </table>
@@ -62,7 +67,7 @@
 - **Управление сессиями** - возобновляйте диалоги, управляйте несколькими сессиями и отслеживайте историю
 - **Система плагинов** - расширяйте CloudCLI кастомными плагинами — добавляйте новые вкладки, бэкенд-сервисы и интеграции. [Создать свой →](https://github.com/cloudcli-ai/cloudcli-plugin-starter)
 - **Интеграция с TaskMaster AI** *(опционально)* - продвинутое управление проектами с планированием задач на базе AI, разбором PRD и автоматизацией workflow
-- **Совместимость с моделями** - работает с семействами моделей Claude и GPT (полный список поддерживаемых моделей доступен через `GET /api/providers/:provider/models`)
+- **Совместимость с моделями** - работает с каталогами Claude, GPT, OpenCode и Kimi Code (полный список поддерживаемых моделей доступен через `GET /api/providers/:provider/models`)
 
 
 ## Быстрый старт
@@ -193,7 +198,7 @@ CloudCLI UI и CloudCLI Cloud расширяют Claude Code, а не работ
 
 - **Все ваши сессии, а не одна** — CloudCLI UI автоматически находит каждую сессию из папки `~/.claude`. Remote Control предоставляет только одну активную сессию, чтобы сделать её доступной в мобильном приложении Claude.
 - **Ваши настройки — это ваши настройки** — MCP-серверы, права инструментов и конфигурация проекта, изменённые в CloudCLI UI, записываются напрямую в конфиг Claude Code и вступают в силу сразу же, и наоборот.
-- **Работает с большим числом агентов** — Claude Code, Cursor CLI и Codex, а не только Claude Code.
+- **Работает с большим числом агентов** — Claude Code, Cursor CLI, Codex, OpenCode и Kimi Code, а не только Claude Code.
 - **Полноценный UI, а не просто окно чата** — проводник файлов, Git-интеграция, управление MCP и shell-терминал — всё встроено.
 - **CloudCLI Cloud работает в облаке** — закройте ноутбук, и агент продолжит работать. Не нужно следить за терминалом и держать машину постоянно активной.
 
@@ -202,7 +207,7 @@ CloudCLI UI и CloudCLI Cloud расширяют Claude Code, а не работ
 <details>
 <summary>Нужно ли отдельно платить за AI-подписку?</summary>
 
-Да. CloudCLI предоставляет среду, а не сам AI. Вы приносите свою подписку Claude, Cursor или Codex. CloudCLI Cloud начинается от €7/месяц за хостируемую среду поверх этого.
+Да. CloudCLI предоставляет среду, а не сам AI. Вы используете собственную подписку выбранного провайдера. CloudCLI Cloud начинается от €7/месяц за хостируемую среду поверх этого.
 
 </details>
 
@@ -241,6 +246,7 @@ GNU General Public License v3.0 - подробности в файле [LICENSE]
 - **[Claude Code](https://docs.anthropic.com/en/docs/claude-code)** - официальный CLI от Anthropic
 - **[Cursor CLI](https://docs.cursor.com/en/cli/overview)** - официальный CLI от Cursor
 - **[Codex](https://developers.openai.com/codex)** - OpenAI Codex
+- **[Kimi Code](https://www.kimi.com/code/docs/en/)** - официальный CLI coding-агента Moonshot AI
 - **[React](https://react.dev/)** - библиотека пользовательских интерфейсов
 - **[Vite](https://vitejs.dev/)** - быстрый инструмент сборки и dev-сервер
 - **[Tailwind CSS](https://tailwindcss.com/)** - utility-first CSS framework
@@ -253,5 +259,5 @@ GNU General Public License v3.0 - подробности в файле [LICENSE]
 ---
 
 <div align="center">
- <strong>Сделано с заботой для сообщества Claude Code, Cursor и Codex.</strong>
+ <strong>Сделано с заботой для сообщества coding-агентов.</strong>
 </div>

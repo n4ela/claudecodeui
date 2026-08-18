@@ -81,6 +81,20 @@ const PROVIDER_CAPABILITIES: Record<LLMProvider, ProviderCapabilities> = {
     supportsTokenUsage: true,
     supportsEffort: true,
   },
+  kimi: {
+    provider: 'kimi',
+    // `kimi --prompt` is deliberately non-interactive and always runs in its
+    // fully autonomous permission mode. Keeping one explicit UI value makes
+    // the behavior honest while still sharing the setting across channels.
+    permissionModes: ['bypassPermissions'],
+    defaultPermissionMode: 'bypassPermissions',
+    supportsImages: true,
+    supportsFiles: true,
+    supportsAbort: true,
+    supportsPermissionRequests: false,
+    supportsTokenUsage: true,
+    supportsEffort: true,
+  },
 };
 
 /**

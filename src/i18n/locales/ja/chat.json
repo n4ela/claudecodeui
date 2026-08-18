@@ -17,7 +17,8 @@
     "tool": "ツール",
     "claude": "Claude",
     "cursor": "Cursor",
-    "codex": "Codex"
+    "codex": "Codex",
+    "kimi": "Kimi Code"
   },
   "tools": {
     "settings": "ツール設定",

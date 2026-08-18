@@ -89,7 +89,7 @@ test('provider model repository stores custom rows only and maintains session re
   }
 });
 
-test('migrations create the provider model index on an install that lacks it', async () => {
+test('migrations preserve custom models while adding Kimi and rebuilding the provider index', async () => {
   const previousDatabasePath = process.env.DATABASE_PATH;
   const tempDirectory = await mkdtemp(path.join(os.tmpdir(), 'provider-model-index-'));
   const databasePath = path.join(tempDirectory, 'auth.db');
@@ -101,12 +101,38 @@ test('migrations create the provider model index on an install that lacks it', a
 
   try {
     const db = getConnection();
-    // Upgraded installs reach runMigrations with provider_models present but no
-    // index, so the CREATE INDEX statement is compiled against the real table
-    // instead of short-circuiting on the existing index name.
     db.exec('DROP INDEX IF EXISTS idx_provider_models_provider_order');
+    db.exec('DROP TABLE provider_models');
+    db.exec(`
+      CREATE TABLE provider_models (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        provider TEXT NOT NULL CHECK (provider IN ('claude', 'cursor', 'codex', 'opencode')),
+        model_id TEXT NOT NULL,
+        model_name TEXT NOT NULL,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(provider, model_id)
+      )
+    `);
+    db.prepare(`
+      INSERT INTO provider_models (provider, model_id, model_name, sort_order)
+      VALUES ('codex', 'private/model', 'Private model', 4)
+    `).run();
 
     runMigrations(db);
+
+    const preserved = db.prepare(`
+      SELECT provider, model_id AS modelId, model_name AS modelName, sort_order AS sortOrder
+      FROM provider_models WHERE provider = 'codex'
+    `).get();
+    assert.deepEqual(preserved, {
+      provider: 'codex', modelId: 'private/model', modelName: 'Private model', sortOrder: 4,
+    });
+    assert.doesNotThrow(() => db.prepare(`
+      INSERT INTO provider_models (provider, model_id, model_name)
+      VALUES ('kimi', 'kimi-code/custom', 'Custom Kimi')
+    `).run());
 
     const indexedColumns = (db
       .prepare('PRAGMA index_info(idx_provider_models_provider_order)')

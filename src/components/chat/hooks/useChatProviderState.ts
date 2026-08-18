@@ -22,9 +22,10 @@ const FALLBACK_DEFAULT_MODEL: Record<LLMProvider, string> = {
   cursor: 'gpt-5.3-codex',
   codex: 'gpt-5.4',
   opencode: 'anthropic/claude-sonnet-4-5',
+  kimi: 'kimi-code/k3',
 };
 
-const PROVIDERS: LLMProvider[] = ['claude', 'cursor', 'codex', 'opencode'];
+const PROVIDERS: LLMProvider[] = ['claude', 'cursor', 'codex', 'opencode', 'kimi'];
 
 const readStoredProvider = (): LLMProvider => {
   const storedProvider = localStorage.getItem('selected-provider');
@@ -44,6 +45,7 @@ const FALLBACK_PERMISSION_MODES: Record<LLMProvider, PermissionMode[]> = {
   cursor: ['default', 'acceptEdits', 'bypassPermissions', 'plan'],
   codex: ['default', 'acceptEdits', 'bypassPermissions'],
   opencode: ['default', 'acceptEdits', 'bypassPermissions', 'plan'],
+  kimi: ['bypassPermissions'],
 };
 
 type ProviderCapabilities = {
@@ -142,6 +144,9 @@ export function useChatProviderState({
   const [opencodeModel, setOpenCodeModel] = useState<string>(() => {
     return localStorage.getItem('opencode-model') || FALLBACK_DEFAULT_MODEL.opencode;
   });
+  const [kimiModel, setKimiModel] = useState<string>(() => {
+    return localStorage.getItem('kimi-model') || FALLBACK_DEFAULT_MODEL.kimi;
+  });
 
   /**
    * Backend-owned capability matrix keyed by provider. Drives the permission
@@ -183,8 +188,14 @@ export function useChatProviderState({
       return;
     }
 
-    setOpenCodeModel(model);
-    localStorage.setItem('opencode-model', model);
+    if (targetProvider === 'opencode') {
+      setOpenCodeModel(model);
+      localStorage.setItem('opencode-model', model);
+      return;
+    }
+
+    setKimiModel(model);
+    localStorage.setItem('kimi-model', model);
   }, []);
 
   const setStoredProviderEffort = useCallback((targetProvider: LLMProvider, effort: string) => {
@@ -371,7 +382,8 @@ export function useChatProviderState({
     cursor: cursorModel,
     codex: codexModel,
     opencode: opencodeModel,
-  }), [claudeModel, cursorModel, codexModel, opencodeModel]);
+    kimi: kimiModel,
+  }), [claudeModel, cursorModel, codexModel, opencodeModel, kimiModel]);
 
   useEffect(() => {
     const claude = providerModelCatalog.claude;
@@ -424,6 +436,19 @@ export function useChatProviderState({
       }
     }
   }, [providerModelCatalog.opencode, opencodeModel]);
+
+  useEffect(() => {
+    const kimi = providerModelCatalog.kimi;
+    if (kimi) {
+      const next = pickStoredOrCurrent('kimi-model', kimiModel, kimi);
+      if (next !== kimiModel) {
+        setKimiModel(next);
+      }
+      if (localStorage.getItem('kimi-model') !== next) {
+        localStorage.setItem('kimi-model', next);
+      }
+    }
+  }, [providerModelCatalog.kimi, kimiModel]);
 
   useEffect(() => {
     const nextEfforts: Partial<Record<LLMProvider, string>> = {};
@@ -887,6 +912,8 @@ export function useChatProviderState({
     currentProviderModelOptions,
     opencodeModel,
     setOpenCodeModel,
+    kimiModel,
+    setKimiModel,
     permissionMode,
     setPermissionMode,
     pendingPermissionRequests,

@@ -131,6 +131,31 @@ function readCodexTokenUsage(fileContent: string): TokenUsageResult {
   };
 }
 
+function readKimiTokenUsage(fileContent: string): TokenUsageResult {
+  let inputTokens = 0;
+  let outputTokens = 0;
+  for (const line of fileContent.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    try {
+      const entry = JSON.parse(line) as AnyRecord;
+      if (entry.type !== 'usage.record') continue;
+      const usage = entry.usage as AnyRecord | undefined;
+      inputTokens += readUsageNumber(usage?.inputOther)
+        + readUsageNumber(usage?.inputCacheRead)
+        + readUsageNumber(usage?.inputCacheCreation);
+      outputTokens += readUsageNumber(usage?.output);
+    } catch {
+      // Ignore one malformed/truncated wire line.
+    }
+  }
+  return {
+    used: inputTokens + outputTokens,
+    inputTokens,
+    outputTokens,
+    breakdown: { input: inputTokens, output: outputTokens },
+  };
+}
+
 function readClaudeTokenUsage(fileContent: string, configuredContextWindow: string | undefined): TokenUsageResult {
   let inputTokens = 0;
   let outputTokens = 0;
@@ -309,6 +334,16 @@ export function createProviderTokenUsageService(
 
         const fileContent = await dependencies.readTextFile(sessionFilePath);
         return readCodexTokenUsage(fileContent);
+      }
+
+      if (session.provider === 'kimi') {
+        if (!session.jsonl_path || !dependencies.fileExists(session.jsonl_path)) {
+          throw new AppError(`Kimi session file for "${sessionId}" was not found.`, {
+            code: 'KIMI_SESSION_FILE_NOT_FOUND',
+            statusCode: 404,
+          });
+        }
+        return readKimiTokenUsage(await dependencies.readTextFile(session.jsonl_path));
       }
 
       let sessionFilePath = session.jsonl_path;

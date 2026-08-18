@@ -119,6 +119,7 @@ export default function McpServerFormModal({
   const supportsHttpHeaders = formData.transport === 'http' || formData.transport === 'sse';
   const supportsWorkingDirectory = !isGlobalMode && MCP_SUPPORTS_WORKING_DIRECTORY[provider];
   const showCodexOnlyFields = provider === 'codex' && !isGlobalMode;
+  const showBearerTokenField = (provider === 'codex' || provider === 'kimi') && !isGlobalMode;
 
   return createPortal(
     <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 p-4">
@@ -399,7 +400,7 @@ export default function McpServerFormModal({
             </div>
           )}
 
-          {showCodexOnlyFields && formData.importMode === 'form' && formData.transport === 'http' && (
+          {showBearerTokenField && formData.importMode === 'form' && formData.transport !== 'stdio' && (
             <div>
               <label className="mb-2 block text-sm font-medium text-foreground">
                 Bearer Token Environment Variable
