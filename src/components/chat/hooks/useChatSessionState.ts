@@ -27,6 +27,8 @@ interface UseChatSessionStateArgs {
   statusCheckSentAtRef: MutableRefObject<Map<string, number>>;
   /** Highest live seq observed per session; sent as `lastSeq` on subscribe. */
   lastSeqRef: MutableRefObject<Map<string, number>>;
+  /** Live run id paired with `lastSeq`, because each new run restarts seq at one. */
+  lastRunIdRef: MutableRefObject<Map<string, string>>;
   sessionStore: SessionStore;
 }
 
@@ -106,6 +108,7 @@ export function useChatSessionState({
   resetStreamingState,
   statusCheckSentAtRef,
   lastSeqRef,
+  lastRunIdRef,
   sessionStore,
 }: UseChatSessionStateArgs) {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(selectedSession?.id || null);
@@ -509,6 +512,7 @@ export function useChatSessionState({
         type: 'chat.subscribe',
         sessions: [{
           sessionId: selectedSessionId,
+          runId: lastRunIdRef.current.get(selectedSessionId),
           lastSeq: lastSeqRef.current.get(selectedSessionId) ?? 0,
         }],
       });
@@ -577,6 +581,7 @@ export function useChatSessionState({
     sendMessage,
     statusCheckSentAtRef,
     lastSeqRef,
+    lastRunIdRef,
     ws,
     sessionStore,
   ]);

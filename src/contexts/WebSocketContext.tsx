@@ -14,6 +14,7 @@ export type ServerEvent = {
   kind?: string;
   type?: string;
   sessionId?: string;
+  runId?: string;
   seq?: number;
   [key: string]: unknown;
 };

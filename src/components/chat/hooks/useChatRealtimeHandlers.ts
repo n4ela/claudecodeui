@@ -9,6 +9,8 @@ import type { PendingPermissionRequest } from '../types/types';
 import type { ProjectSession, LLMProvider } from '../../../types/app';
 import type { SessionStore, NormalizedMessage } from '../../../stores/useSessionStore';
 
+import { acceptSequencedChatEvent } from './chatEventSequence';
+
 const isActionablePermissionRequest = (request: { toolName?: unknown } | null | undefined): boolean => {
   return request?.toolName !== 'ExitPlanMode' && request?.toolName !== 'exit_plan_mode';
 };
@@ -34,6 +36,8 @@ interface UseChatRealtimeHandlersArgs {
    * frame; read wherever a `chat.subscribe` is sent (session open, reconnect).
    */
   lastSeqRef: MutableRefObject<Map<string, number>>;
+  /** Current live run id per session; disambiguates seq values after a new turn starts. */
+  lastRunIdRef: MutableRefObject<Map<string, string>>;
   /** When each session's `chat.subscribe` was last sent; guards stale idle acks. */
   statusCheckSentAtRef: MutableRefObject<Map<string, number>>;
   onSessionProcessing?: MarkSessionProcessing;
@@ -67,6 +71,7 @@ export function useChatRealtimeHandlers({
   streamTimersRef,
   accumulatedStreamsRef,
   lastSeqRef,
+  lastRunIdRef,
   statusCheckSentAtRef,
   onSessionProcessing,
   onSessionIdle,
@@ -99,12 +104,16 @@ export function useChatRealtimeHandlers({
       const activeViewSessionId = activeViewSessionIdRef.current;
       const sid = (typeof msg.sessionId === 'string' && msg.sessionId) || activeViewSessionId;
 
-      // Record replay progress for every sequenced live event.
-      if (sid && typeof msg.seq === 'number') {
-        const known = lastSeqRef.current.get(sid) ?? 0;
-        if (msg.seq > known) {
-          lastSeqRef.current.set(sid, msg.seq);
-        }
+      // Drop reconnect/subscription replays that this tab already applied.
+      // `runId` makes a seq reset on the next turn distinguishable from an
+      // older frame being delivered twice during the current turn.
+      if (sid && !acceptSequencedChatEvent(
+        lastSeqRef.current,
+        lastRunIdRef.current,
+        sid,
+        msg,
+      )) {
+        return;
       }
 
       switch (msg.kind) {
@@ -357,6 +366,7 @@ export function useChatRealtimeHandlers({
     streamTimersRef,
     accumulatedStreamsRef,
     lastSeqRef,
+    lastRunIdRef,
     statusCheckSentAtRef,
     onSessionProcessing,
     onSessionIdle,

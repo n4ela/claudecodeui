@@ -234,6 +234,13 @@ export type NormalizedMessage = {
    * the live events they missed across websocket reconnects.
    */
   seq?: number;
+  /**
+   * Unique id of the live provider run that owns `seq`. Sequence numbers start
+   * at one for every run, so reconnecting clients must compare both values
+   * before treating a replayed event as already seen. REST history messages do
+   * not carry this field.
+   */
+  runId?: string;
   role?: 'user' | 'assistant';
   content?: string;
   /**

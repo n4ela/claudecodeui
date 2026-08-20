@@ -63,8 +63,10 @@ test('live events are remapped to the app session id and sequenced', async () =>
 
     assert.equal(connection.frames.length, 2);
     assert.equal(connection.frames[0]?.sessionId, 'app-run-1');
+    assert.equal(connection.frames[0]?.runId, run.runId);
     assert.equal(connection.frames[0]?.seq, 1);
     assert.equal(connection.frames[1]?.sessionId, 'app-run-1');
+    assert.equal(connection.frames[1]?.runId, run.runId);
     assert.equal(connection.frames[1]?.seq, 2);
   });
 });
@@ -273,6 +275,10 @@ test('replayEvents returns only events after the requested seq', async () => {
     const replayed = chatRunRegistry.replayEvents('app-run-4', 1);
     assert.deepEqual(replayed.map((event) => event.content), ['b', 'c']);
     assert.deepEqual(replayed.map((event) => event.seq), [2, 3]);
+
+    // A seq from a previous run cannot suppress this run's early events.
+    const replayedForOldRun = chatRunRegistry.replayEvents('app-run-4', 99, 'old-run-id');
+    assert.deepEqual(replayedForOldRun.map((event) => event.content), ['a', 'b', 'c']);
   });
 });
 
@@ -332,5 +338,6 @@ test('startRun rejects a second concurrent run for the same session', async () =
       userId: null,
     });
     assert.ok(third);
+    assert.notEqual(third.runId, first.runId);
   });
 });

@@ -50,6 +50,9 @@ function ChatInterface({
   // on every sequenced frame, read whenever a `chat.subscribe` is sent so the
   // server replays only the events this client actually missed.
   const lastSeqRef = useRef(new Map<string, number>());
+  // `seq` restarts at one for each turn; pair it with the server's run id so
+  // reconnect replay dedupe never confuses two consecutive turns.
+  const lastRunIdRef = useRef(new Map<string, string>());
 
   const resetStreamingState = useCallback(() => {
     for (const timer of streamTimersRef.current.values()) {
@@ -147,6 +150,7 @@ function ChatInterface({
     resetStreamingState,
     statusCheckSentAtRef,
     lastSeqRef,
+    lastRunIdRef,
     sessionStore,
   });
 
@@ -246,6 +250,7 @@ function ChatInterface({
       type: 'chat.subscribe',
       sessions: [{
         sessionId: selectedSession.id,
+        runId: lastRunIdRef.current.get(selectedSession.id),
         lastSeq: lastSeqRef.current.get(selectedSession.id) ?? 0,
       }],
     });
@@ -262,6 +267,7 @@ function ChatInterface({
     streamTimersRef,
     accumulatedStreamsRef,
     lastSeqRef,
+    lastRunIdRef,
     statusCheckSentAtRef,
     onSessionProcessing,
     onSessionIdle,

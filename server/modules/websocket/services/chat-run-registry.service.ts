@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
@@ -27,6 +28,7 @@ type ChatRunStatus = 'running' | 'completed';
  *   can replay exactly the events it missed via `chat.subscribe`.
  */
 type ChatRun = {
+  runId: string;
   appSessionId: string;
   provider: LLMProvider;
   providerSessionId: string | null;
@@ -164,6 +166,7 @@ function decorateAndRecordEvent(run: ChatRun, message: NormalizedMessage): Norma
   const outbound: NormalizedMessage = {
     ...message,
     sessionId: run.appSessionId,
+    runId: run.runId,
     seq: run.lastSeq,
   };
 
@@ -246,6 +249,7 @@ export const chatRunRegistry = {
     }
 
     const run: ChatRun = {
+      runId: randomUUID(),
       appSessionId: input.appSessionId,
       provider: input.provider,
       providerSessionId: input.providerSessionId,
@@ -334,13 +338,22 @@ export const chatRunRegistry = {
    * An empty array with `run.lastSeq > afterSeq` not covered by the buffer
    * means the buffer was truncated; the client should refresh over REST.
    */
-  replayEvents(appSessionId: string, afterSeq: number): NormalizedMessage[] {
+  replayEvents(
+    appSessionId: string,
+    afterSeq: number,
+    clientRunId?: string | null,
+  ): NormalizedMessage[] {
     const run = runs.get(appSessionId);
     if (!run) {
       return [];
     }
 
-    return run.events.filter((event) => typeof event.seq === 'number' && event.seq > afterSeq);
+    // Sequence numbers restart for every run. A client carrying a sequence
+    // from an older run must replay this run from its first buffered event.
+    const effectiveAfterSeq = clientRunId && clientRunId !== run.runId ? 0 : afterSeq;
+    return run.events.filter(
+      (event) => typeof event.seq === 'number' && event.seq > effectiveAfterSeq,
+    );
   },
 
   /**
