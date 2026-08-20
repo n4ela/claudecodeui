@@ -23,6 +23,17 @@ The unattended macOS deployment runs CloudCLI through a dedicated signed
 identifier and code signature give macOS one durable identity for privacy
 permissions across restarts and Homebrew upgrades.
 
+The runtime uses the Lebedushka-owned reverse-DNS bundle identifier
+`com.lebedushka.cloudcli.runtime`. Do not restore the historical
+`ru.poison-studio.cloudcli.runtime` identifier in local builds or deployment
+automation.
+
+Launch the runtime directly from a macOS `LaunchAgent`; do not place PM2,
+Homebrew Node, or another interpreter above it in the process tree. macOS TCC
+inherits the responsible code identity from that launcher, so a PM2 parent
+causes privacy requests to be attributed to Homebrew `node` even when the
+accessing binary is the signed runtime.
+
 Upstream starts plugin server entries with `spawn('node', ...)`. That resolves a
 second runtime through `PATH`, escaping the signed application identity. A
 plugin that reads another application's data, such as Codex usage history, can
