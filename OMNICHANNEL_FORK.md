@@ -16,6 +16,31 @@ rebuilding the whole application. The core patch cannot currently be a normal
 plugin because upstream's public plugin API does not expose chat interception
 or a session event fan-out hook.
 
+## Signed runtime and plugin processes
+
+The unattended macOS deployment runs CloudCLI through a dedicated signed
+`CloudCLI Runtime.app` instead of a Homebrew `node` process. Its stable bundle
+identifier and code signature give macOS one durable identity for privacy
+permissions across restarts and Homebrew upgrades.
+
+Upstream starts plugin server entries with `spawn('node', ...)`. That resolves a
+second runtime through `PATH`, escaping the signed application identity. A
+plugin that reads another application's data, such as Codex usage history, can
+then trigger a blocking macOS TCC "data from other apps" prompt and make an
+unattended CloudCLI host appear offline.
+
+This fork starts plugin servers with `process.execPath`. CLI installations keep
+using the same Node executable as their parent, while desktop and local-server
+bundles keep every plugin backend under the embedded signed runtime. The server
+bundle requires no separate patch: `npm run build` compiles this behavior into
+`dist-server`, and `scripts/release/build-server-bundle.js` includes that output
+in the archive.
+
+When merging an upstream release, verify that
+`server/modules/plugins/plugin-process.service.ts` still launches the plugin
+entry with `process.execPath`; reverting to a PATH-resolved `node` reintroduces
+the unattended macOS permission prompt.
+
 ## Native Kimi Code provider
 
 Install the official CLI and authenticate it on the same account that runs
@@ -87,7 +112,9 @@ transport. Never resolve those conflicts by choosing one whole side.
    fork's `dist/` and `dist-server/` artifacts.
 5. Ensure the CloudCLI CLI entry remains executable after overlaying locally
    built artifacts.
-6. Restart CloudCLI and verify HTTP, the plugin `/status`, database columns,
+6. Verify plugin server processes use the bundled host executable rather than a
+   PATH-resolved Homebrew `node` on macOS.
+7. Restart CloudCLI and verify HTTP, the plugin `/status`, database columns,
    Telegram/CloudCLI connectivity, and every systemd timer.
 
 ## Русская памятка

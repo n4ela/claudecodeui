@@ -50,6 +50,8 @@ function buildPluginEnv(name) {
  * Start a plugin's server subprocess.
  * The plugin's server entry must print a JSON line with { ready: true, port: <number> }
  * to stdout within 10 seconds.
+ * Consumed by the plugins module to start enabled plugin backends with the
+ * same Node runtime identity as the CloudCLI host.
  */
 export function startPluginServer(name, pluginDir, serverEntry) {
   if (runningPlugins.has(name)) {
@@ -65,7 +67,12 @@ export function startPluginServer(name, pluginDir, serverEntry) {
 
     const serverPath = path.join(pluginDir, serverEntry);
 
-    const pluginProcess = spawn('node', [serverPath], {
+    // Reuse the host executable instead of resolving `node` through PATH. The
+    // desktop/server bundle embeds its own runtime; on macOS that executable is
+    // signed and owns the host's privacy grants. Falling back to a Homebrew Node
+    // gives plugin processes a different code identity and triggers recurring
+    // TCC "data from other apps" prompts on unattended installations.
+    const pluginProcess = spawn(process.execPath, [serverPath], {
       cwd: pluginDir,
       env: buildPluginEnv(name),
       stdio: ['ignore', 'pipe', 'pipe'],
