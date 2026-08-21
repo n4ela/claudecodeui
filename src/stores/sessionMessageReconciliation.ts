@@ -107,3 +107,38 @@ export function removeOptimisticUserEchoes(
     return false;
   });
 }
+
+/**
+ * Collapses the temporary live assistant row with its persisted transcript
+ * copy. The REST copy can sort before or after the websocket row because Kimi
+ * timestamps the persisted event before it reaches the browser.
+ */
+export function dedupeAdjacentAssistantEchoes(
+  messages: NormalizedMessage[],
+): NormalizedMessage[] {
+  const deduped: NormalizedMessage[] = [];
+
+  for (const message of messages) {
+    const previous = deduped.at(-1);
+    if (previous) {
+      const previousText = (previous.content || '').trim();
+      const messageText = (message.content || '').trim();
+      const sameNonEmptyText = messageText.length > 0 && messageText === previousText;
+      const previousIsAssistantText = previous.kind === 'text' && previous.role === 'assistant';
+      const messageIsAssistantText = message.kind === 'text' && message.role === 'assistant';
+      const previousIsAssistantLike = previousIsAssistantText || previous.kind === 'stream_delta';
+      const messageIsAssistantLike = messageIsAssistantText || message.kind === 'stream_delta';
+
+      if (sameNonEmptyText && previousIsAssistantLike && messageIsAssistantLike) {
+        if (messageIsAssistantText && !previousIsAssistantText) {
+          deduped[deduped.length - 1] = message;
+        }
+        continue;
+      }
+    }
+
+    deduped.push(message);
+  }
+
+  return deduped;
+}

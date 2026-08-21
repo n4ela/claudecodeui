@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import type { NormalizedMessage } from './useSessionStore';
-import { removeOptimisticUserEchoes } from './sessionMessageReconciliation';
+import {
+  dedupeAdjacentAssistantEchoes,
+  removeOptimisticUserEchoes,
+} from './sessionMessageReconciliation';
 
 const createUserMessage = (
   id: string,
@@ -67,4 +70,65 @@ test('keeps the existing optimistic text reconciliation behavior', () => {
   });
 
   assert.deepEqual(removeOptimisticUserEchoes([persisted], [local]), []);
+});
+
+test('removes a live Kimi echo that sorts after the persisted assistant reply', () => {
+  const persisted = createUserMessage('kimi-history', '2026-08-21T01:09:07.589Z', {
+    provider: 'kimi',
+    role: 'assistant',
+    content: 'Final Kimi reply',
+  });
+  const live = createUserMessage('__streaming_session-1', '2026-08-21T01:09:07.700Z', {
+    provider: 'kimi',
+    kind: 'stream_delta',
+    role: undefined,
+    content: 'Final Kimi reply',
+  });
+
+  assert.deepEqual(dedupeAdjacentAssistantEchoes([persisted, live]), [persisted]);
+});
+
+test('prefers the persisted Kimi reply when it sorts after the live row', () => {
+  const live = createUserMessage('__streaming_session-1', '2026-08-21T01:09:07.500Z', {
+    provider: 'kimi',
+    kind: 'stream_delta',
+    role: undefined,
+    content: 'Final Kimi reply',
+  });
+  const persisted = createUserMessage('kimi-history', '2026-08-21T01:09:07.589Z', {
+    provider: 'kimi',
+    role: 'assistant',
+    content: 'Final Kimi reply',
+  });
+
+  assert.deepEqual(dedupeAdjacentAssistantEchoes([live, persisted]), [persisted]);
+});
+
+test('collapses persisted and two live copies of the same Kimi reply', () => {
+  const persisted = createUserMessage('kimi-history', '2026-08-21T01:37:33.249Z', {
+    provider: 'kimi',
+    role: 'assistant',
+    content: 'One persisted reply',
+  });
+  const firstLive = createUserMessage('kimi-live', '2026-08-21T01:37:33.300Z', {
+    provider: 'kimi',
+    kind: 'stream_delta',
+    role: undefined,
+    content: 'One persisted reply',
+  });
+  const accumulatedLive = createUserMessage('__streaming_session-1', '2026-08-21T01:37:33.400Z', {
+    provider: 'kimi',
+    kind: 'stream_delta',
+    role: undefined,
+    content: 'One persisted reply',
+  });
+
+  assert.deepEqual(
+    dedupeAdjacentAssistantEchoes([persisted, firstLive, accumulatedLive]),
+    [persisted],
+  );
+  assert.deepEqual(
+    dedupeAdjacentAssistantEchoes([firstLive, accumulatedLive, persisted]),
+    [persisted],
+  );
 });

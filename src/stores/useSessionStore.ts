@@ -12,7 +12,10 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { authenticatedFetch } from '../utils/api';
 import type { LLMProvider } from '../types/app';
 
-import { removeOptimisticUserEchoes } from './sessionMessageReconciliation';
+import {
+  dedupeAdjacentAssistantEchoes,
+  removeOptimisticUserEchoes,
+} from './sessionMessageReconciliation';
 
 // ─── NormalizedMessage (mirrors server/adapters/types.js) ────────────────────
 
@@ -251,43 +254,6 @@ function isAssistantTextEchoedInSameTurnOnServer(
 }
 
 /**
- * After `finalizeStreaming`, the client holds a synthetic assistant `text` row
- * while the sessions API soon returns the same reply with a different id.
- * Those sit back-to-back in merged order and look like duplicate bubbles until
- * `refreshFromServer` clears realtime. Collapse same-text assistant rows and
- * stream_placeholder → text when content matches.
- */
-function dedupeAdjacentAssistantEchoes(merged: NormalizedMessage[]): NormalizedMessage[] {
-  const out: NormalizedMessage[] = [];
-  for (const m of merged) {
-    const prev = out[out.length - 1];
-    if (prev) {
-      if (prev.kind === 'stream_delta' && m.kind === 'text' && m.role === 'assistant') {
-        const ps = (prev.content || '').trim();
-        const ms = (m.content || '').trim();
-        if (ps.length > 0 && ps === ms) {
-          out[out.length - 1] = m;
-          continue;
-        }
-      }
-      if (
-        prev.kind === 'text'
-        && m.kind === 'text'
-        && prev.role === 'assistant'
-        && m.role === 'assistant'
-      ) {
-        const ms = (m.content || '').trim();
-        if (ms.length > 0 && ms === (prev.content || '').trim()) {
-          continue;
-        }
-      }
-    }
-    out.push(m);
-  }
-  return out;
-}
-
-/**
  * After a server refresh, drop only the realtime rows the persisted transcript
  * already owns. Anything not yet on disk (common right after `complete`, while
  * JSONL indexing lags) stays in `realtimeMessages` so the chat pane never
@@ -310,14 +276,14 @@ function pruneRealtimeSupersededByServer(
     }
 
     if (message.kind === 'stream_delta' || message.id === `__streaming_${message.sessionId}`) {
-      if (isAssistantTextEchoedInSameTurnOnServer(message, serverMessages, realtimeMessages)) {
+      if (isAssistantTextEchoedInSameTurnOnServer(message, serverMessages, reconciledRealtimeMessages)) {
         return false;
       }
       return true;
     }
 
     if (message.kind === 'text' && message.role === 'assistant') {
-      if (isAssistantTextEchoedInSameTurnOnServer(message, serverMessages, realtimeMessages)) {
+      if (isAssistantTextEchoedInSameTurnOnServer(message, serverMessages, reconciledRealtimeMessages)) {
         return false;
       }
       return true;

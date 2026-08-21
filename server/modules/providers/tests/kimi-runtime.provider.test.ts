@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -15,8 +15,8 @@ import {
   kimiRuntime,
   readKimiSessionId,
   resolveKimiEffort,
-} from './kimi-runtime.provider.js';
-import { KimiSessionsProvider } from './kimi-sessions.provider.js';
+} from '../list/kimi/kimi-runtime.provider.js';
+import { KimiSessionsProvider } from '../list/kimi/kimi-sessions.provider.js';
 
 const sessionsProvider = new KimiSessionsProvider();
 const models = {
@@ -57,7 +57,15 @@ if (process.env.KIMI_ARGS_CAPTURE) {
 }
 console.log(JSON.stringify({ role: 'meta', type: 'system.version', version: '1.2.3' }));
 console.log(JSON.stringify({ role: 'assistant', content: 'Kimi response' }));
-if (prompt !== 'Hang before completion') {
+if (prompt === 'Hang after persisted completion' && process.env.KIMI_TEST_WIRE_PATH) {
+  fs.appendFileSync(process.env.KIMI_TEST_WIRE_PATH, JSON.stringify({
+    type: 'turn.ended',
+    turnId: 2,
+    reason: 'completed',
+    time: Date.now(),
+  }) + '\\n');
+}
+if (prompt !== 'Hang before completion' && prompt !== 'Hang after persisted completion') {
   console.log(JSON.stringify({ role: 'meta', type: 'session.resume_hint', session_id: 'ses_new' }));
 }
 if (prompt.startsWith('Hang ')) {
@@ -156,6 +164,54 @@ test('Kimi runtime completes on the final resume hint and cleans up a CLI that s
     await delay(1_250);
     assert.equal(abortKimiSession('app-existing'), false);
     assert.equal(messages.filter((message) => message.kind === 'complete').length, 1);
+  });
+});
+
+test('Kimi runtime falls back to a newly persisted completed turn when resume hint is missing', async () => {
+  await withFakeKimi(async (tempRoot) => {
+    const sessionDir = path.join(tempRoot, 'sessions', 'ses_existing');
+    const wireDir = path.join(sessionDir, 'agents', 'main');
+    const wirePath = path.join(wireDir, 'wire.jsonl');
+    const previousKimiHome = process.env.KIMI_CODE_HOME;
+    const previousWirePath = process.env.KIMI_TEST_WIRE_PATH;
+    const messages: NormalizedMessage[] = [];
+
+    try {
+      await mkdir(wireDir, { recursive: true });
+      await writeFile(wirePath, `${JSON.stringify({
+        type: 'turn.ended',
+        turnId: 1,
+        reason: 'completed',
+        time: Date.now() - 1_000,
+      })}\n`, 'utf8');
+      await writeFile(path.join(tempRoot, 'session_index.jsonl'), `${JSON.stringify({
+        sessionId: 'ses_existing',
+        sessionDir,
+        workDir: tempRoot,
+      })}\n`, 'utf8');
+      process.env.KIMI_CODE_HOME = tempRoot;
+      process.env.KIMI_TEST_WIRE_PATH = wirePath;
+
+      await Promise.race([
+        kimiRuntime.run(
+          'Hang after persisted completion',
+          { sessionId: 'app-existing', cwd: tempRoot },
+          createWriter(messages),
+          runtimeContext,
+        ),
+        delay(3_000).then(() => { throw new Error('persisted completion fallback timed out'); }),
+      ]);
+
+      assert.equal(messages.filter((message) => message.kind === 'complete').length, 1);
+      assert.ok(messages.some((message) => message.kind === 'complete' && message.success === true));
+      await delay(1_250);
+      assert.equal(abortKimiSession('app-existing'), false);
+    } finally {
+      if (previousKimiHome === undefined) delete process.env.KIMI_CODE_HOME;
+      else process.env.KIMI_CODE_HOME = previousKimiHome;
+      if (previousWirePath === undefined) delete process.env.KIMI_TEST_WIRE_PATH;
+      else process.env.KIMI_TEST_WIRE_PATH = previousWirePath;
+    }
   });
 });
 

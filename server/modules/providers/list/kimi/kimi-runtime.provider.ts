@@ -1,4 +1,6 @@
 import type { ChildProcess } from 'node:child_process';
+import { open, readFile, stat } from 'node:fs/promises';
+import path from 'node:path';
 
 import crossSpawn from 'cross-spawn';
 
@@ -15,6 +17,8 @@ import type {
   ProviderRuntimeWriter,
 } from '@/shared/types.js';
 import { createCompleteMessage, createNormalizedMessage } from '@/shared/utils.js';
+
+import { getKimiSessionIndexPath } from './kimi-paths.js';
 
 type KimiRuntimeOptions = {
   sessionId?: string;
@@ -70,6 +74,47 @@ const sendRunFailedNotification = notifyRunFailed as unknown as (
  */
 const KIMI_EXIT_GRACE_MS = 1_000;
 const KIMI_FORCE_KILL_GRACE_MS = 1_000;
+const KIMI_WIRE_POLL_MS = 250;
+const KIMI_WIRE_READ_CHUNK_BYTES = 64 * 1024;
+
+type KimiWireCursor = {
+  filePath: string;
+  offset: number;
+  remainder: string;
+};
+
+async function createKimiWireCursor(providerSessionId: string | null): Promise<KimiWireCursor | null> {
+  if (!providerSessionId) return null;
+
+  try {
+    let sessionDir: string | null = null;
+    for (const line of (await readFile(getKimiSessionIndexPath(), 'utf8')).split(/\r?\n/)) {
+      if (!line.trim()) continue;
+      try {
+        const entry = JSON.parse(line) as { sessionId?: unknown; sessionDir?: unknown };
+        if (entry.sessionId === providerSessionId && typeof entry.sessionDir === 'string') {
+          sessionDir = entry.sessionDir;
+        }
+      } catch {
+        // A damaged index row must not disable Kimi execution or later rows.
+      }
+    }
+    if (!sessionDir) return null;
+
+    const filePath = path.join(sessionDir, 'agents', 'main', 'wire.jsonl');
+    return { filePath, offset: (await stat(filePath)).size, remainder: '' };
+  } catch {
+    // The normal stdout completion marker remains authoritative when no
+    // provider transcript exists yet or the optional fallback is unavailable.
+    return null;
+  }
+}
+
+function isCompletedKimiWireRecord(rawRecord: unknown): boolean {
+  if (!rawRecord || typeof rawRecord !== 'object') return false;
+  const record = rawRecord as AnyRecord;
+  return record.type === 'turn.ended' && record.reason === 'completed';
+}
 
 /**
  * All live Kimi children grouped by every id that can address them. A Set is
@@ -154,6 +199,9 @@ function spawnKimi(
     let promiseSettled = false;
     let exitTimer: NodeJS.Timeout | null = null;
     let forceKillTimer: NodeJS.Timeout | null = null;
+    let wireMonitorTimer: NodeJS.Timeout | null = null;
+    let wireMonitorInFlight = false;
+    let wireCursor: KimiWireCursor | null = null;
 
     const finalAppSessionId = (): string => sessionId || capturedSessionId || processKey;
 
@@ -174,6 +222,12 @@ function spawnKimi(
       if (forceKillTimer) clearTimeout(forceKillTimer);
       exitTimer = null;
       forceKillTimer = null;
+    };
+
+    const clearWireMonitor = (): void => {
+      if (wireMonitorTimer) clearInterval(wireMonitorTimer);
+      wireMonitorTimer = null;
+      wireCursor = null;
     };
 
     const notifyTerminal = ({ code = null, error = null }: TerminalState = {}): void => {
@@ -216,6 +270,7 @@ function spawnKimi(
     const completeSemantically = (): void => {
       if (semanticCompletionSeen) return;
       semanticCompletionSeen = true;
+      clearWireMonitor();
       if (!completeSent && !processRecord?.aborted) {
         completeSent = true;
         writer.send(createCompleteMessage({
@@ -227,6 +282,71 @@ function spawnKimi(
       }
       settleResolved();
       scheduleCompletedProcessCleanup();
+    };
+
+    const consumeWireText = (text: string): void => {
+      if (!wireCursor || !text) return;
+      const lines = `${wireCursor.remainder}${text}`.split(/\r?\n/);
+      wireCursor.remainder = lines.pop() ?? '';
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          if (isCompletedKimiWireRecord(JSON.parse(line))) {
+            completeSemantically();
+            return;
+          }
+        } catch {
+          // Skip a damaged provider event and continue monitoring later rows.
+        }
+      }
+    };
+
+    const pollWireForCompletion = async (): Promise<void> => {
+      const cursor = wireCursor;
+      if (!cursor || wireMonitorInFlight || semanticCompletionSeen) return;
+      wireMonitorInFlight = true;
+      try {
+        const handle = await open(cursor.filePath, 'r');
+        try {
+          const metadata = await handle.stat();
+          if (metadata.size < cursor.offset) {
+            // Kimi normally only appends. If the file is replaced, establish a
+            // fresh baseline instead of mistaking an old turn for this run.
+            cursor.offset = metadata.size;
+            cursor.remainder = '';
+            return;
+          }
+
+          while (cursor.offset < metadata.size && !semanticCompletionSeen) {
+            const bytesToRead = Math.min(
+              KIMI_WIRE_READ_CHUNK_BYTES,
+              metadata.size - cursor.offset,
+            );
+            const buffer = Buffer.allocUnsafe(bytesToRead);
+            const { bytesRead } = await handle.read(buffer, 0, bytesToRead, cursor.offset);
+            if (bytesRead <= 0) break;
+            cursor.offset += bytesRead;
+            consumeWireText(buffer.toString('utf8', 0, bytesRead));
+          }
+        } finally {
+          await handle.close();
+        }
+      } catch {
+        // Transient read/index races are retried on the next poll. Stdout and
+        // process close remain the primary completion mechanisms.
+      } finally {
+        wireMonitorInFlight = false;
+      }
+    };
+
+    const startWireCompletionMonitor = (cursor: KimiWireCursor | null): void => {
+      if (!cursor) return;
+      wireCursor = cursor;
+      wireMonitorTimer = setInterval(() => {
+        void pollWireForCompletion();
+      }, KIMI_WIRE_POLL_MS);
+      wireMonitorTimer.unref?.();
+      void pollWireForCompletion();
     };
 
     const registerSession = (nextSessionId: string | null): void => {
@@ -290,6 +410,7 @@ function spawnKimi(
 
       const env = { ...process.env };
       if (resolvedEffort) env.KIMI_MODEL_THINKING_EFFORT = resolvedEffort;
+      const initialWireCursor = await createKimiWireCursor(providerSessionId);
       kimiProcess = crossSpawn('kimi', args, {
         cwd: workingDir,
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -298,6 +419,7 @@ function spawnKimi(
       processRecord = { child: kimiProcess, keys: new Set<string>(), aborted: false };
       addProcessKey(processRecord, processKey);
       if (capturedSessionId && !sessionId) addProcessKey(processRecord, capturedSessionId);
+      startWireCompletionMonitor(initialWireCursor);
 
       kimiProcess.stdout?.on('data', (data: Buffer | string) => {
         stdoutBuffer += data.toString();
@@ -310,6 +432,7 @@ function spawnKimi(
       });
       kimiProcess.on('close', async (code) => {
         clearExitTimers();
+        clearWireMonitor();
         if (processRecord) removeProcess(processRecord);
         if (stdoutBuffer.trim()) processLine(stdoutBuffer.trim());
         stdoutBuffer = '';
@@ -362,6 +485,7 @@ function spawnKimi(
       });
       kimiProcess.on('error', async (error) => {
         clearExitTimers();
+        clearWireMonitor();
         if (processRecord) removeProcess(processRecord);
         if (semanticCompletionSeen || processRecord?.aborted) {
           settleResolved();
