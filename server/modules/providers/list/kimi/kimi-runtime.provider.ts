@@ -173,7 +173,15 @@ export function readKimiSessionId(event: unknown): string | null {
 function isKimiTurnComplete(event: unknown): boolean {
   if (!event || typeof event !== 'object') return false;
   const record = event as AnyRecord;
-  return record.role === 'meta' && record.type === 'session.resume_hint';
+  if (record.role === 'meta' && record.type === 'session.resume_hint') return true;
+
+  // Kimi emits one assistant envelope per model step. A step that will keep
+  // running carries tool_calls; the final answer has visible content and no
+  // calls. Treating that envelope as terminal avoids waiting for a resume hint
+  // that older/large sessions occasionally never print.
+  const content = typeof record.content === 'string' ? record.content.trim() : '';
+  const toolCalls = Array.isArray(record.tool_calls) ? record.tool_calls : [];
+  return record.role === 'assistant' && content.length > 0 && toolCalls.length === 0;
 }
 
 function spawnKimi(

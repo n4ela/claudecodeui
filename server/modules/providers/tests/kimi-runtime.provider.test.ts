@@ -56,7 +56,16 @@ if (process.env.KIMI_ARGS_CAPTURE) {
   }));
 }
 console.log(JSON.stringify({ role: 'meta', type: 'system.version', version: '1.2.3' }));
-console.log(JSON.stringify({ role: 'assistant', content: 'Kimi response' }));
+const hasPendingToolCall = prompt === 'Hang before completion'
+  || prompt === 'Hang after resume hint'
+  || prompt === 'Hang after persisted completion';
+console.log(JSON.stringify({
+  role: 'assistant',
+  content: 'Kimi response',
+  ...(hasPendingToolCall ? {
+    tool_calls: [{ id: 'tool-1', function: { name: 'Read', arguments: '{}' } }],
+  } : {}),
+}));
 if (prompt === 'Hang after persisted completion' && process.env.KIMI_TEST_WIRE_PATH) {
   fs.appendFileSync(process.env.KIMI_TEST_WIRE_PATH, JSON.stringify({
     type: 'turn.ended',
@@ -65,7 +74,7 @@ if (prompt === 'Hang after persisted completion' && process.env.KIMI_TEST_WIRE_P
     time: Date.now(),
   }) + '\\n');
 }
-if (prompt !== 'Hang before completion' && prompt !== 'Hang after persisted completion') {
+if (!prompt.startsWith('Hang ') || prompt === 'Hang after resume hint') {
   console.log(JSON.stringify({ role: 'meta', type: 'session.resume_hint', session_id: 'ses_new' }));
 }
 if (prompt.startsWith('Hang ')) {
@@ -153,7 +162,7 @@ test('Kimi runtime completes on the final resume hint and cleans up a CLI that s
   await withFakeKimi(async (tempRoot) => {
     const messages: NormalizedMessage[] = [];
     await kimiRuntime.run(
-      'Hang after completion',
+      'Hang after resume hint',
       { sessionId: 'app-existing', cwd: tempRoot },
       createWriter(messages),
       runtimeContext,
@@ -164,6 +173,23 @@ test('Kimi runtime completes on the final resume hint and cleans up a CLI that s
     await delay(1_250);
     assert.equal(abortKimiSession('app-existing'), false);
     assert.equal(messages.filter((message) => message.kind === 'complete').length, 1);
+  });
+});
+
+test('Kimi runtime completes on a terminal assistant envelope when resume hint is missing', async () => {
+  await withFakeKimi(async (tempRoot) => {
+    const messages: NormalizedMessage[] = [];
+    await kimiRuntime.run(
+      'Hang after assistant completion',
+      { sessionId: 'app-existing', cwd: tempRoot },
+      createWriter(messages),
+      runtimeContext,
+    );
+
+    assert.equal(messages.filter((message) => message.kind === 'complete').length, 1);
+    assert.ok(messages.some((message) => message.kind === 'complete' && message.success === true));
+    await delay(1_250);
+    assert.equal(abortKimiSession('app-existing'), false);
   });
 });
 
